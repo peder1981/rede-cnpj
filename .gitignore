@@ -1,1 +1,8 @@
 *.pyc
+
+# Arquivos de dados grandes
+rede_cria_tabelas/dados-publicos-zip/*.zip
+rede_cria_tabelas/dados-publicos/*.db
+*.db
+!rede_teste.db
+!cnpj_teste.db
