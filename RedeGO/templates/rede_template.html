@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedeCNPJ - Visualização de Rede de Relacionamentos</title>
+    <link rel="stylesheet" href="/rede/static/css/style.css">
+    <script src="/rede/static/js/vivagraph.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>RedeCNPJ - Rede de Relacionamentos</h1>
+            <div id="toolbar">
+                <input type="text" id="searchBox" placeholder="Buscar CNPJ, CPF ou Nome...">
+                <button id="btnSearch">Buscar</button>
+                <button id="btnHelp">Ajuda</button>
+            </div>
+        </header>
+
+        <main>
+            <div id="graphContainer"></div>
+            <div id="sidebar">
+                <div id="nodeInfo"></div>
+                <div id="controls">
+                    <h3>Controles</h3>
+                    <button id="btnExpandAll">Expandir Tudo</button>
+                    <button id="btnCollapseAll">Colapsar Tudo</button>
+                    <button id="btnClearGraph">Limpar Grafo</button>
+                    <button id="btnExportJSON">Exportar JSON</button>
+                    <button id="btnExportExcel">Exportar Excel</button>
+                </div>
+            </div>
+        </main>
+
+        <div id="messageBox" class="hidden"></div>
+    </div>
+
+    <script>
+        // Configuração inicial
+        const config = {
+            cpfcnpj: "{{ .cpfcnpj }}",
+            camada: {{ .camada }},
+            idArquivoServidor: "{{ .idArquivoServidor }}",
+            bBaseReceita: {{ .bBaseReceita }},
+            bBaseLocal: {{ .bBaseLocal }},
+            btextoEmbaixoIcone: {{ .btextoEmbaixoIcone }},
+            referenciaBD: "{{ .referenciaBD }}",
+            geocode_max: {{ .geocode_max }},
+            bbusca_chaves: {{ .bbusca_chaves }},
+            usuarioLocal: {{ .usuarioLocal }},
+            mobile: {{ .mobile }},
+            chrome: {{ .chrome }},
+            firefox: {{ .firefox }},
+            bMenuInserirInicial: {{ .bMenuInserirInicial }},
+            mensagem: "{{ .mensagem }}"
+        };
+
+        console.log("RedeCNPJ - Versão Go iniciada");
+        console.log("Configuração:", config);
+    </script>
+    <script src="/rede/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Binários
+rede-cnpj
+rede-cnpj.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Arquivos de teste
+*.test
+
+# Arquivos de saída
+*.out
+
+# Dependências
+vendor/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Bancos de dados
+bases/*.db
+!bases/.gitkeep
+
+# Arquivos do usuário
+arquivos/*
+!arquivos/.gitkeep
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
