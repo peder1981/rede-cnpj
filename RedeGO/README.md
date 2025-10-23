@@ -6,38 +6,78 @@
 
 Versão em Go da ferramenta RedeCNPJ para visualização de dados públicos de CNPJ da Receita Federal.
 
-**Conversão completa do projeto Python original com melhorias significativas de performance.**
+**Interface TUI Interativa + Servidor de APIs REST**
 
 ## ✨ Destaques
 
+- 🎮 **Interface TUI Interativa** - Navegação por árvore com setas
 - 🚀 **5-10x mais rápido** que a versão Python
 - 💾 **75% menos uso de memória**
 - 📦 **Binário standalone** - sem dependências externas
 - ⚡ **Startup 25x mais rápido** (0.1s vs 2.5s)
 - 🔒 **Type-safe** com tipagem estática
 - 🧪 **Testado** com cobertura de 60-95%
+- 🔌 **APIs REST** para integração externa
 
 ## 📚 Documentação
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Comece aqui! Instalação em 5 minutos
-- **[INDEX.md](INDEX.md)** - Índice completo da documentação
-- **[INSTALL.md](INSTALL.md)** - Guia detalhado de instalação
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Arquitetura e design
-- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Migração Python → Go
-- **[SUMMARY.md](SUMMARY.md)** - Resumo completo do projeto
+### Guias Principais
+- **[API_COMPLETE.md](API_COMPLETE.md)** - 📖 **Documentação completa de todas as APIs**
+- **[TUI_GUIDE.md](TUI_GUIDE.md)** - Guia da interface TUI interativa
+- **[IMPORTER_GUIDE.md](IMPORTER_GUIDE.md)** - Guia do importador de dados
+- **[FEATURES_ANALYSIS.md](FEATURES_ANALYSIS.md)** - Análise de features do Python
+
+### Documentação Técnica
+- **[doc/QUICKSTART.md](doc/QUICKSTART.md)** - Comece aqui! Instalação em 5 minutos
+- **[doc/INDEX.md](doc/INDEX.md)** - Índice completo da documentação
+- **[doc/INSTALL.md](doc/INSTALL.md)** - Guia detalhado de instalação
+- **[doc/ARCHITECTURE.md](doc/ARCHITECTURE.md)** - Arquitetura e design
+- **[doc/MIGRATION_GUIDE.md](doc/MIGRATION_GUIDE.md)** - Migração Python → Go
+- **[doc/SUMMARY.md](doc/SUMMARY.md)** - Resumo completo do projeto
 
 ## 🚀 Quick Start
 
-### Método 1: Script Automatizado (Recomendado)
+### Interface TUI (Recomendado)
 
 ```bash
-# Executa todas as tarefas necessárias e inicia o servidor
-./start.sh
+# Compila e executa a interface interativa
+make build-cli
+./rede-cnpj-cli -conf_file=rede.ini
 
-# Pressione CTRL+C para encerrar graciosamente
+# Digite o CNPJ e navegue com as setas!
+# ↑↓ navegar | → expandir | ← colapsar | q sair
 ```
 
-### Método 2: Manual
+Ver [TUI_GUIDE.md](TUI_GUIDE.md) para guia completo.
+
+### Importação de Dados (Primeira vez)
+
+```bash
+# Importa dados da Receita Federal (processo completo)
+make build-importer
+./rede-cnpj-importer -all
+
+# Ou etapas individuais:
+./rede-cnpj-importer -download  # Baixa arquivos ZIP
+./rede-cnpj-importer -process   # Processa e cria cnpj.db
+./rede-cnpj-importer -links     # Cria rede.db
+./rede-cnpj-importer -search    # Cria rede_search.db
+```
+
+Ver [IMPORTER_GUIDE.md](IMPORTER_GUIDE.md) para guia completo.
+
+### Servidor de APIs REST (Opcional)
+
+```bash
+# Para integração com outras aplicações
+./start.sh
+
+# Ou manualmente:
+make build
+./rede-cnpj -conf_file=rede.ini
+```
+
+### Configuração Inicial
 
 ```bash
 # 1. Instalar dependências
@@ -47,19 +87,23 @@ make deps
 cp ../rede/bases/cnpj_teste.db bases/
 cp ../rede/bases/rede_teste.db bases/
 
-# 3. Compilar e executar
-make run
+# 3. Compilar ambos
+make build-all-binaries
 ```
 
-Acesse: http://127.0.0.1:5000/rede/
+## 🎮 Binários e Scripts
 
-## 🎮 Scripts de Gerenciamento
+### Aplicações
+- **`./rede-cnpj-cli`** - Interface TUI interativa (navegação por setas)
+- **`./rede-cnpj`** - Servidor de APIs REST
+- **`./rede-cnpj-importer`** - Importador de dados da Receita Federal
 
-- **`./start.sh`** - Inicia a aplicação (verifica tudo, compila, executa)
+### Scripts
+- **`./start.sh`** - Inicia servidor de APIs REST
 - **`./stop.sh`** - Encerra todos os processos
-- **`./restart.sh`** - Reinicia a aplicação
+- **`./restart.sh`** - Reinicia o servidor de APIs
 
-Ver [SCRIPTS.md](SCRIPTS.md) para documentação completa.
+Ver [doc/SCRIPTS.md](doc/SCRIPTS.md) para documentação completa.
 
 ## 📊 Performance
 

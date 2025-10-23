@@ -5,11 +5,24 @@ BINARY_NAME=rede-cnpj
 MAIN_PATH=./cmd/server
 BUILD_DIR=./build
 
-# Build
+# Build servidor de APIs
 build:
 	@echo "Compilando $(BINARY_NAME)..."
 	@go build -o $(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build concluído: $(BINARY_NAME)"
+
+build-cli:
+	@echo "Compilando rede-cnpj-cli..."
+	@go build -o rede-cnpj-cli ./cmd/cli
+	@echo "Build concluído: rede-cnpj-cli"
+
+build-importer:
+	@echo "Compilando rede-cnpj-importer..."
+	@go build -o rede-cnpj-importer ./cmd/importer
+	@echo "Build concluído: rede-cnpj-importer"
+
+build-all-binaries: build build-cli build-importer
+	@echo "Todos os binários compilados!"
 
 # Build para produção (otimizado)
 build-prod:

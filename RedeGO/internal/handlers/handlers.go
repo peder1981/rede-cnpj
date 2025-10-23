@@ -27,41 +27,6 @@ func NewHandler(cfg *config.Config) *Handler {
 	}
 }
 
-// ServeHTMLPagina renderiza a página principal
-func (h *Handler) ServeHTMLPagina(c *gin.Context) {
-	cpfcnpj := c.Param("cpfcnpj")
-	camadaStr := c.Param("camada")
-	idArquivoServidor := c.Param("idArquivoServidor")
-
-	camada := 0
-	if camadaStr != "" {
-		camada, _ = strconv.Atoi(camadaStr)
-	}
-	if camada > 10 {
-		camada = 10
-	}
-
-	params := gin.H{
-		"cpfcnpj":              cpfcnpj,
-		"camada":               camada,
-		"idArquivoServidor":    idArquivoServidor,
-		"bBaseReceita":         h.cfg.BaseReceita != "",
-		"bBaseLocal":           h.cfg.BaseLocal != "",
-		"btextoEmbaixoIcone":   h.cfg.BTextoEmbaixoIcone,
-		"referenciaBD":         h.cfg.ReferenciaBD,
-		"geocode_max":          h.cfg.GeocodeMax,
-		"bbusca_chaves":        h.cfg.BuscaChaves,
-		"usuarioLocal":         isLocalUser(c),
-		"mobile":               isMobile(c),
-		"chrome":               strings.Contains(c.Request.UserAgent(), "Chrome"),
-		"firefox":              strings.Contains(c.Request.UserAgent(), "Firefox"),
-		"bMenuInserirInicial":  h.cfg.ExibeMenuInserir,
-		"mensagem":             "",
-	}
-
-	c.HTML(http.StatusOK, "rede_template.html", params)
-}
-
 // ServeRedeJSONCNPJ retorna dados da rede em formato JSON
 func (h *Handler) ServeRedeJSONCNPJ(c *gin.Context) {
 	tipo := c.Param("tipo")
@@ -235,11 +200,4 @@ func (h *Handler) ServeAPIStatus(c *gin.Context) {
 
 func isLocalUser(c *gin.Context) bool {
 	return c.ClientIP() == "127.0.0.1" || c.ClientIP() == "::1"
-}
-
-func isMobile(c *gin.Context) bool {
-	ua := c.Request.UserAgent()
-	return strings.Contains(ua, "Mobile") || 
-	       strings.Contains(ua, "Opera Mini") || 
-	       strings.Contains(ua, "Android")
 }
