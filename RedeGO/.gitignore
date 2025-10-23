@@ -1,5 +1,7 @@
 # Binários
 rede-cnpj
+rede-cnpj-cli
+rede-cnpj-importer
 rede-cnpj.exe
 *.exe
 *.dll
@@ -36,3 +38,6 @@ arquivos/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Output
+output/
