@@ -38,26 +38,35 @@ func main() {
 
 	router := gin.Default()
 
-	// Carrega templates HTML
-	router.LoadHTMLGlob("templates/*")
-
-	// Serve arquivos estáticos
-	router.Static("/rede/static", "./static")
-	router.Static("/rede/arquivos", cfg.PastaArquivos)
-
 	// Cria handlers
 	h := handlers.NewHandler(cfg)
 
-	// Rotas principais
-	router.GET("/rede/", h.ServeHTMLPagina)
-	router.POST("/rede/", h.ServeHTMLPagina)
-	router.GET("/rede/grafico/:camada/:cpfcnpj", h.ServeHTMLPagina)
-	router.GET("/rede/grafico_no_servidor/:idArquivoServidor", h.ServeHTMLPagina)
+	// ============================================
+	// APENAS APIs REST
+	// ============================================
 
 	// API de dados
 	router.POST("/rede/grafojson/:tipo/:camada/:cpfcnpj", h.ServeRedeJSONCNPJ)
 	router.GET("/rede/dadosjson/:cpfcnpj", h.ServeDadosDetalhes)
 	router.POST("/rede/dadosjson/:cpfcnpj", h.ServeDadosDetalhes)
+	
+	// API de busca avançada
+	router.POST("/rede/busca", h.ServeBuscaAvancada)
+	
+	// API de exportação
+	router.POST("/rede/export/excel", h.ServeExportExcel)
+	router.POST("/rede/export/csv", h.ServeExportCSV)
+	
+	// API de grafos avançados
+	router.POST("/rede/caminhos", h.ServeCaminhos)
+	router.POST("/rede/entidades_comuns", h.ServeEntidadesComuns)
+	router.POST("/rede/filtrar_grafo", h.ServeFiltrarGrafo)
+	
+	// API de analytics
+	router.POST("/rede/analytics", h.ServeAnalytics)
+	router.POST("/rede/nos_centrais", h.ServeNosCentrais)
+	router.POST("/rede/comunidades", h.ServeComunidades)
+	router.POST("/rede/caminho_mais_curto", h.ServeCaminhoMaisCurto)
 
 	// Busca
 	router.GET("/rede/busca", h.ServeBuscaPorNome)
@@ -89,8 +98,15 @@ func main() {
 
 	// Inicia servidor
 	addr := fmt.Sprintf(":%d", cfg.PortaFlask)
-	log.Printf("Servidor RedeCNPJ iniciado em http://127.0.0.1%s/rede/", addr)
+	log.Println("╔════════════════════════════════════════════════════════════════╗")
+	log.Println("║         RedeCNPJ - Servidor de APIs REST                      ║")
+	log.Println("╚════════════════════════════════════════════════════════════════╝")
+	log.Printf("Servidor API iniciado em http://127.0.0.1%s/rede/api/", addr)
 	log.Printf("Referência BD: %s", cfg.ReferenciaBD)
+	log.Println("")
+	log.Println("NOTA: Este servidor fornece apenas APIs REST.")
+	log.Println("      Para interface gráfica, execute: ./rede-cnpj-gui")
+	log.Println("")
 
 	if err := router.Run(addr); err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)

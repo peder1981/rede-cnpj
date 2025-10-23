@@ -111,37 +111,38 @@ func (s *RedeService) buscarSocios(cnpj string, graph *models.Graph, nodeMap map
 		return fmt.Errorf("banco de dados de rede não disponível")
 	}
 
+	// Monta ID no formato PJ_CNPJ
+	cnpjID := "PJ_" + cnpj
+
 	query := `
-		SELECT identificador_socio, nome_socio, qualificacao_socio, cpf_cnpj_socio
-		FROM socios
-		WHERE cnpj = ?
+		SELECT id1, id2, descricao
+		FROM ligacao
+		WHERE id2 = ?
 		LIMIT ?
 	`
 
-	rows, err := db.Query(query, cnpj, s.cfg.LimiteRegistrosCamada)
+	rows, err := db.Query(query, cnpjID, s.cfg.LimiteRegistrosCamada)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var identificador, nome, qualificacao string
-		var cpfCnpjSocio sql.NullString
+		var id1, id2, descricao string
 
-		if err := rows.Scan(&identificador, &nome, &qualificacao, &cpfCnpjSocio); err != nil {
+		if err := rows.Scan(&id1, &id2, &descricao); err != nil {
 			continue
 		}
 
-		// Cria nó do sócio se não existir
-		socioID := identificador
-		if cpfCnpjSocio.Valid && cpfCnpjSocio.String != "" {
-			socioID = cpfCnpjSocio.String
-		}
+		// Remove prefixo PE_ ou PF_ do ID do sócio
+		socioID := id1
+		socioLabel := strings.TrimPrefix(id1, "PE_")
+		socioLabel = strings.TrimPrefix(socioLabel, "PF_")
 
 		if !nodeMap[socioID] {
 			node := models.Node{
 				ID:    socioID,
-				Label: nome,
+				Label: socioLabel,
 				Type:  "PF",
 				Icon:  "pessoa",
 			}
@@ -149,15 +150,15 @@ func (s *RedeService) buscarSocios(cnpj string, graph *models.Graph, nodeMap map
 			nodeMap[socioID] = true
 		}
 
-		// Cria aresta
-		edgeKey := cnpj + "->" + socioID
+		// Cria aresta (invertida: sócio -> empresa)
+		edgeKey := socioID + "->" + cnpjID
 		if !edgeMap[edgeKey] {
 			edge := models.Edge{
-				From:         cnpj,
-				To:           socioID,
-				Label:        qualificacao,
+				From:         socioID,
+				To:           cnpjID,
+				Label:        descricao,
 				Type:         "socio",
-				Qualificacao: qualificacao,
+				Qualificacao: descricao,
 			}
 			graph.Edges = append(graph.Edges, edge)
 			edgeMap[edgeKey] = true
@@ -175,41 +176,46 @@ func (s *RedeService) buscarEmpresas(socioID string, graph *models.Graph, nodeMa
 	}
 
 	query := `
-		SELECT cnpj, qualificacao_socio
-		FROM socios
-		WHERE identificador_socio = ? OR cpf_cnpj_socio = ?
+		SELECT id1, id2, descricao
+		FROM ligacao
+		WHERE id1 = ?
 		LIMIT ?
 	`
 
-	rows, err := db.Query(query, socioID, socioID, s.cfg.LimiteRegistrosCamada)
+	rows, err := db.Query(query, socioID, s.cfg.LimiteRegistrosCamada)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var cnpj, qualificacao string
+		var id1, id2, descricao string
 
-		if err := rows.Scan(&cnpj, &qualificacao); err != nil {
+		if err := rows.Scan(&id1, &id2, &descricao); err != nil {
 			continue
 		}
 
+		// id2 é o CNPJ no formato PJ_CNPJ
+		cnpjID := id2
+		cnpj := strings.TrimPrefix(id2, "PJ_")
+
 		// Cria nó da empresa se não existir
-		if !nodeMap[cnpj] {
+		if !nodeMap[cnpjID] {
 			node := s.createNodeFromID(cnpj)
+			node.ID = cnpjID // Usa ID com prefixo
 			graph.Nodes = append(graph.Nodes, node)
-			nodeMap[cnpj] = true
+			nodeMap[cnpjID] = true
 		}
 
-		// Cria aresta
-		edgeKey := cnpj + "->" + socioID
+		// Cria aresta (sócio -> empresa)
+		edgeKey := socioID + "->" + cnpjID
 		if !edgeMap[edgeKey] {
 			edge := models.Edge{
-				From:         cnpj,
-				To:           socioID,
-				Label:        qualificacao,
+				From:         socioID,
+				To:           cnpjID,
+				Label:        descricao,
 				Type:         "socio",
-				Qualificacao: qualificacao,
+				Qualificacao: descricao,
 			}
 			graph.Edges = append(graph.Edges, edge)
 			edgeMap[edgeKey] = true
@@ -255,32 +261,68 @@ func (s *RedeService) GetDadosCNPJ(cnpj string) *models.CNPJData {
 		return nil
 	}
 
+	// Extrai partes do CNPJ
+	cnpjBasico := cnpj[:8]
+	cnpjOrdem := cnpj[8:12]
+	cnpjDV := cnpj[12:14]
+
+	// Query corrigida para estrutura real do banco
 	query := `
 		SELECT 
-			cnpj, razao_social, nome_fantasia, situacao_cadastral,
-			data_situacao, motivo_situacao, natureza_juridica,
-			cnae_principal, capital_social, porte, data_abertura,
-			logradouro, numero, complemento, bairro, municipio, uf, cep,
-			email, telefone1, telefone2
-		FROM empresas
-		WHERE cnpj = ?
+			e.cnpj_basico || e.cnpj_ordem || e.cnpj_dv as cnpj,
+			emp.razao_social,
+			e.nome_fantasia,
+			e.situacao_cadastral,
+			e.data_situacao_cadastral,
+			e.motivo_situacao_cadastral,
+			emp.natureza_juridica,
+			e.cnae_fiscal,
+			emp.capital_social,
+			emp.porte_empresa,
+			e.data_inicio_atividades,
+			e.tipo_logradouro || ' ' || e.logradouro as logradouro,
+			e.numero,
+			e.complemento,
+			e.bairro,
+			m.descricao as municipio,
+			e.uf,
+			e.cep,
+			e.ddd1 || e.telefone1 as telefone1,
+			e.ddd2 || e.telefone2 as telefone2,
+			e.correio_eletronico as email
+		FROM estabelecimento e
+		JOIN empresas emp ON e.cnpj_basico = emp.cnpj_basico
+		LEFT JOIN municipio m ON e.municipio = m.codigo
+		WHERE e.cnpj_basico = ? AND e.cnpj_ordem = ? AND e.cnpj_dv = ?
 	`
 
 	var dados models.CNPJData
 	var nomeFantasia, dataAbertura, email, telefone1, telefone2 sql.NullString
 	var complemento, motivoSituacao, naturezaJuridica, cnae sql.NullString
+	var numero, bairro, cep sql.NullString
 
-	err := db.QueryRow(query, cnpj).Scan(
+	err := db.QueryRow(query, cnpjBasico, cnpjOrdem, cnpjDV).Scan(
 		&dados.CNPJ, &dados.RazaoSocial, &nomeFantasia, &dados.SituacaoCadastral,
 		&dados.DataSituacao, &motivoSituacao, &naturezaJuridica,
 		&cnae, &dados.CapitalSocial, &dados.Porte, &dataAbertura,
-		&dados.Logradouro, &dados.Numero, &complemento, &dados.Bairro,
-		&dados.Municipio, &dados.UF, &dados.CEP,
-		&email, &telefone1, &telefone2,
+		&dados.Logradouro, &numero, &complemento, &bairro,
+		&dados.Municipio, &dados.UF, &cep,
+		&telefone1, &telefone2, &email,
 	)
 
 	if err != nil {
 		return nil
+	}
+
+	// Preenche campos opcionais
+	if numero.Valid {
+		dados.Numero = numero.String
+	}
+	if bairro.Valid {
+		dados.Bairro = bairro.String
+	}
+	if cep.Valid {
+		dados.CEP = cep.String
 	}
 
 	// Preenche campos opcionais
