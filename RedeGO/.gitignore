@@ -28,7 +28,7 @@ vendor/
 # Bancos de dados
 bases/*.db
 !bases/.gitkeep
-
+dados-publicos-zip/*
 # Arquivos do usuário
 arquivos/*
 !arquivos/.gitkeep
