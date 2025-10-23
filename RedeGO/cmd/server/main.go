@@ -67,6 +67,28 @@ func main() {
 	router.POST("/rede/nos_centrais", h.ServeNosCentrais)
 	router.POST("/rede/comunidades", h.ServeComunidades)
 	router.POST("/rede/caminho_mais_curto", h.ServeCaminhoMaisCurto)
+	
+	// API de cruzamento de dados (SEM CENSURA)
+	router.GET("/rede/cross/empresas_por_cpf/:cpf", h.ServeCrossDataEmpresasPorCPF)
+	router.GET("/rede/cross/socios_por_cnpj/:cnpj", h.ServeCrossDataSociosPorCNPJ)
+	router.POST("/rede/cross/socios_em_comum", h.ServeCrossDataSociosEmComum)
+	router.GET("/rede/cross/rede_empresas_pessoa/:cpf", h.ServeCrossDataRedeEmpresasPessoa)
+	router.POST("/rede/cross/empresas_mesmo_endereco", h.ServeCrossDataEmpresasMesmoEndereco)
+	router.POST("/rede/cross/empresas_mesmo_contato", h.ServeCrossDataEmpresasMesmoContato)
+	router.GET("/rede/cross/representantes_legais", h.ServeCrossDataRepresentantesLegais)
+	router.GET("/rede/cross/empresas_estrangeiras", h.ServeCrossDataEmpresasEstrangeiras)
+	router.GET("/rede/cross/socios_estrangeiros", h.ServeCrossDataSociosEstrangeiros)
+	router.GET("/rede/cross/timeline_pessoa/:cpf", h.ServeCrossDataTimelinePessoa)
+	router.GET("/rede/cross/socios_empresas_baixadas", h.ServeCrossDataSociosEmpresasBaixadas)
+	router.GET("/rede/cross/dados_completos/:cnpj", h.ServeCrossDataDadosCompletos)
+	
+	// API de Ferramentas Forenses
+	router.GET("/rede/forensics/investigate/:cpf", h.ServeForensicsInvestigatePerson)
+	router.GET("/rede/forensics/shell_companies", h.ServeForensicsShellCompanies)
+	router.POST("/rede/forensics/frontmen", h.ServeForensicsFrontmen)
+	router.GET("/rede/forensics/mass_registration/:cpf", h.ServeForensicsMassRegistration)
+	router.GET("/rede/forensics/ownership_chain/:cnpj", h.ServeForensicsOwnershipChain)
+	router.GET("/rede/forensics/suspicious_patterns", h.ServeForensicsSuspiciousPatterns)
 
 	// Busca
 	router.GET("/rede/busca", h.ServeBuscaPorNome)

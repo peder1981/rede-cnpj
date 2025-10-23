@@ -20,6 +20,11 @@ const (
 	modeAnalytics
 	modeHelp
 	modeExport
+	modeCrossData
+	modeSearch
+	modeViewCPF
+	modeViewCNPJ
+	modeForensics
 )
 
 type nodeItem struct {
@@ -42,6 +47,12 @@ type model struct {
 	stats       *analytics.GraphStats
 	currentGraph *models.Graph
 	exportMenu   int // 0=excel, 1=csv_nodes, 2=csv_edges, 3=csv_stats
+	crossMenu    int // menu de cruzamentos
+	crossInput   string // input para cruzamentos
+	crossResults []map[string]interface{} // resultados
+	searchInput  string // input de busca (CPF/CNPJ)
+	searchType   string // "cpf" ou "cnpj"
+	viewData     string // dados para visualização
 }
 
 func initialModel(redeService *services.RedeService, cnpj string) model {
@@ -119,6 +130,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case modeExport:
 			return m.updateExport(msg)
+		case modeCrossData:
+			return m.updateCrossData(msg)
+		case modeSearch:
+			return m.updateSearch(msg)
+		case modeViewCPF:
+			return m.updateViewCPF(msg)
+		case modeViewCNPJ:
+			return m.updateViewCNPJ(msg)
+		case modeForensics:
+			return m.updateForensics(msg)
 		}
 
 	case graphMsg:
@@ -226,6 +247,15 @@ func (m model) updateTree(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.message = "✗ Carregue um grafo primeiro"
 		}
+	case "c":
+		m.mode = modeCrossData
+		m.crossMenu = 0
+		m.message = "Selecione o tipo de cruzamento"
+	case "b":
+		// Buscar CPF/CNPJ
+		m.mode = modeSearch
+		m.searchInput = ""
+		m.message = "Digite CPF ou CNPJ para buscar"
 	}
 	return m, nil
 }
@@ -270,6 +300,27 @@ func (m model) updateExport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "backspace":
 		m.mode = modeTree
 		m.message = "Exportação cancelada"
+	}
+	return m, nil
+}
+
+func (m model) updateCrossData(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.crossMenu > 0 {
+			m.crossMenu--
+		}
+	case "down", "j":
+		if m.crossMenu < 11 {
+			m.crossMenu++
+		}
+	case "enter", " ":
+		// Executa cruzamento
+		m.message = "Funcionalidade em desenvolvimento"
+		m.mode = modeTree
+	case "q", "backspace":
+		m.mode = modeTree
+		m.message = "Voltou ao modo árvore"
 	}
 	return m, nil
 }
@@ -403,6 +454,16 @@ func (m model) View() string {
 		return m.viewHelp()
 	case modeExport:
 		return m.viewExport()
+	case modeCrossData:
+		return m.viewCrossData()
+	case modeSearch:
+		return m.viewSearch()
+	case modeViewCPF:
+		return m.viewCPFDetails(m.viewData)
+	case modeViewCNPJ:
+		return m.viewCNPJDetails(m.viewData)
+	case modeForensics:
+		return m.viewForensicsInvestigate(m.viewData)
 	}
 
 	return ""
@@ -483,7 +544,8 @@ func (m model) viewTree() string {
 	// Menu de comandos
 	s += "┌──────────────────────────────────────────────────────────────────────┐\n"
 	s += "│ NAVEGAÇÃO: ↑↓ mover | → expandir | ← colapsar                       │\n"
-	s += "│ AÇÕES: [A]nalytics | [E]xportar | [F1/?] Ajuda | [ESC] Sair        │\n"
+	s += "│ AÇÕES: [A]nalytics | [B]uscar CPF/CNPJ | [C]ruzamentos             │\n"
+	s += "│        [E]xportar | [F1/?] Ajuda | [ESC] Sair                       │\n"
 	s += "└──────────────────────────────────────────────────────────────────────┘\n"
 
 	return s

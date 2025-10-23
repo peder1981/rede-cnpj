@@ -20,10 +20,12 @@ func main() {
 	
 	flag.Parse()
 
-	// Carrega configuração
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Erro ao carregar configuração: %v", err)
+	// Carrega configuração manualmente sem flags duplicadas
+	cfg := &config.Config{
+		BaseReceita:    "bases/cnpj.db",
+		BaseRede:       "bases/rede.db",
+		BaseRedeSearch: "bases/rede_search.db",
+		PastaArquivos:  "arquivos",
 	}
 
 	// Cria importador

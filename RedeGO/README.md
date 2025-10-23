@@ -23,6 +23,10 @@ Versão em Go da ferramenta RedeCNPJ para visualização de dados públicos de C
 
 ### Guias Principais
 - **[API_COMPLETE.md](API_COMPLETE.md)** - 📖 **Documentação completa de todas as APIs**
+- **[FORENSICS_TOOLKIT.md](FORENSICS_TOOLKIT.md)** - 🔍 **Kit de Ferramentas Forenses**
+- **[CROSSDATA_API.md](CROSSDATA_API.md)** - 🔓 **APIs de Cruzamento SEM CENSURA**
+- **[CROSSDATA_SUMMARY.md](CROSSDATA_SUMMARY.md)** - 🎯 **Resumo do Sistema de Cruzamento**
+- **[DATABASE_ANALYSIS.md](DATABASE_ANALYSIS.md)** - 🗄️ **Análise Completa dos Bancos**
 - **[TUI_GUIDE.md](TUI_GUIDE.md)** - Guia da interface TUI interativa
 - **[IMPORTER_GUIDE.md](IMPORTER_GUIDE.md)** - Guia do importador de dados
 - **[FEATURES_ANALYSIS.md](FEATURES_ANALYSIS.md)** - Análise de features do Python
@@ -42,7 +46,7 @@ Versão em Go da ferramenta RedeCNPJ para visualização de dados públicos de C
 ```bash
 # Compila e executa a interface interativa
 make build-cli
-./rede-cnpj-cli -conf_file=rede.ini
+./bin/rede-cnpj-cli -conf_file=rede.ini
 
 # Digite o CNPJ e navegue com as setas!
 # ↑↓ navegar | → expandir | ← colapsar | q sair
