@@ -24,8 +24,37 @@ build-importer:
 	@go build -o $(BUILD_DIR)/rede-cnpj-importer ./cmd/importer
 	@echo "Build concluído: $(BUILD_DIR)/rede-cnpj-importer"
 
-build-all-binaries: build build-cli build-importer
+build-migrate:
+	@echo "Compilando rede-cnpj-migrate..."
+	@mkdir -p $(BUILD_DIR)
+	@go build -o $(BUILD_DIR)/rede-cnpj-migrate ./cmd/migrate
+	@echo "Build concluído: $(BUILD_DIR)/rede-cnpj-migrate"
+
+build-all-binaries: build build-cli build-importer build-migrate
 	@echo "Todos os binários compilados!"
+
+# Migrar dados SQLite -> PostgreSQL
+migrate: build-migrate
+	@echo "Iniciando migração SQLite -> PostgreSQL..."
+	@./$(BUILD_DIR)/rede-cnpj-migrate
+
+# Migrar em background
+migrate-bg: build-migrate
+	@echo "Iniciando migração em background..."
+	@nohup ./$(BUILD_DIR)/rede-cnpj-migrate > migrate.log 2>&1 &
+	@echo "✅ Migração iniciada em background"
+	@echo "   Log: migrate.log"
+	@echo "   Monitor: ./scripts/postgres/monitor_migration.sh status"
+
+# Monitorar migração
+migrate-status:
+	@./scripts/postgres/monitor_migration.sh status
+
+migrate-logs:
+	@./scripts/postgres/monitor_migration.sh logs
+
+migrate-stop:
+	@./scripts/postgres/monitor_migration.sh stop
 
 # Build para produção (otimizado)
 build-prod:
@@ -123,9 +152,22 @@ setup:
 # Ajuda
 help:
 	@echo "Comandos disponíveis:"
+	@echo ""
+	@echo "Build:"
 	@echo "  make build         - Compila o projeto"
+	@echo "  make build-cli     - Compila CLI"
+	@echo "  make build-migrate - Compila migrador PostgreSQL"
 	@echo "  make build-prod    - Compila otimizado para produção"
 	@echo "  make build-all     - Compila para múltiplas plataformas"
+	@echo ""
+	@echo "Migração PostgreSQL:"
+	@echo "  make migrate       - Migra SQLite -> PostgreSQL (foreground)"
+	@echo "  make migrate-bg    - Migra em background"
+	@echo "  make migrate-status - Mostra status da migração"
+	@echo "  make migrate-logs  - Mostra logs da migração"
+	@echo "  make migrate-stop  - Para a migração"
+	@echo ""
+	@echo "Desenvolvimento:"
 	@echo "  make run           - Compila e executa"
 	@echo "  make deps          - Instala dependências"
 	@echo "  make update-deps   - Atualiza dependências"

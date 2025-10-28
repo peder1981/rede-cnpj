@@ -20,6 +20,7 @@ POSTGRES_USER="postgres"
 DB_NAME="rede_cnpj"
 DB_USER="rede_user"
 DB_PASSWORD="rede_cnpj_2025"
+DB_PORT="5433"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ################################################################################
@@ -143,11 +144,11 @@ execute_sql_scripts() {
     
     # 1. Schemas
     log_info "Criando schemas..."
-    PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -d $DB_NAME -f "$SCRIPT_DIR/01_schemas.sql"
+    PGPASSWORD=$DB_PASSWORD psql -h localhost -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SCRIPT_DIR/01_schemas.sql"
     
     # 2. Tabelas
     log_info "Criando tabelas..."
-    PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -d $DB_NAME -f "$SCRIPT_DIR/02_tables.sql"
+    PGPASSWORD=$DB_PASSWORD psql -h localhost -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SCRIPT_DIR/02_tables.sql"
     
     # 3. Índices (se existir)
     if [ -f "$SCRIPT_DIR/03_indexes.sql" ]; then
@@ -171,7 +172,7 @@ execute_sql_scripts() {
 verify_setup() {
     log_step "Verificando instalação..."
     
-    PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -d $DB_NAME <<EOF
+    PGPASSWORD=$DB_PASSWORD psql -h localhost -p $DB_PORT -U $DB_USER -d $DB_NAME <<EOF
 -- Listar schemas
 SELECT schema_name FROM information_schema.schemata 
 WHERE schema_name IN ('receita', 'rede', 'forensics', 'cache');
@@ -197,7 +198,7 @@ create_pgpass() {
     log_step "Criando arquivo .pgpass..."
     
     PGPASS_FILE="$HOME/.pgpass"
-    PGPASS_LINE="localhost:5432:$DB_NAME:$DB_USER:$DB_PASSWORD"
+    PGPASS_LINE="localhost:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD"
     
     # Criar ou atualizar .pgpass
     if [ -f "$PGPASS_FILE" ]; then
@@ -227,16 +228,16 @@ show_connection_info() {
     echo ""
     echo "📋 Informações de Conexão:"
     echo "   Host:     localhost"
-    echo "   Porta:    5432"
+    echo "   Porta:    $DB_PORT"
     echo "   Database: $DB_NAME"
     echo "   Usuário:  $DB_USER"
     echo "   Senha:    $DB_PASSWORD"
     echo ""
     echo "🔌 Conectar via psql:"
-    echo "   psql -U $DB_USER -d $DB_NAME"
+    echo "   psql -h localhost -p $DB_PORT -U $DB_USER -d $DB_NAME"
     echo ""
     echo "🔌 String de conexão:"
-    echo "   postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+    echo "   postgresql://$DB_USER:$DB_PASSWORD@localhost:$DB_PORT/$DB_NAME"
     echo ""
     echo "📊 Próximos passos:"
     echo "   1. Migrar dados do SQLite"

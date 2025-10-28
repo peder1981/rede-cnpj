@@ -23,7 +23,7 @@ func (m model) viewSearch() string {
 	s += "  CNPJ: 01234567000100\n\n"
 
 	s += "┌──────────────────────────────────────────────────────────────────────┐\n"
-	s += "│ [ENTER] Buscar | [ESC/Q] Cancelar                                   │\n"
+	s += "│ [ENTER] Buscar | [Q] Cancelar | [ESC] Voltar                        │\n"
 	s += "│                                                                      │\n"
 	s += "│ Após buscar:                                                         │\n"
 	s += "│ • CPF:  Ver todas empresas + Investigação forense                   │\n"
@@ -63,7 +63,7 @@ func (m model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searchInput = m.searchInput[:len(m.searchInput)-1]
 		}
 		
-	case "q", "esc":
+	case "q":
 		m.mode = modeTree
 		m.searchInput = ""
 		m.message = "Busca cancelada"
@@ -97,8 +97,9 @@ func (m model) updateViewCPF(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeForensics
 		m.message = "Análise forense iniciada"
 	case "t":
-		// Timeline (futuro)
-		m.message = "Timeline em desenvolvimento"
+		// Timeline
+		m.mode = modeTimeline
+		m.message = "Carregando timeline de atividades..."
 	}
 	return m, nil
 }
@@ -110,11 +111,13 @@ func (m model) updateViewCNPJ(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeTree
 		m.message = "Voltou ao modo árvore"
 	case "s":
-		// Ver sócios (futuro)
-		m.message = "Lista de sócios em desenvolvimento"
+		// Ver sócios
+		m.mode = modeViewSocios
+		m.message = "Carregando lista de sócios..."
 	case "c":
-		// Cadeia de controle (futuro)
-		m.message = "Cadeia de controle em desenvolvimento"
+		// Cadeia de controle
+		m.mode = modeCadeiaControle
+		m.message = "Carregando cadeia de controle..."
 	}
 	return m, nil
 }
@@ -126,11 +129,59 @@ func (m model) updateForensics(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeViewCPF
 		m.message = "Voltou para dados do CPF"
 	case "d":
-		// Ver detalhes de empresa (futuro)
-		m.message = "Detalhes em desenvolvimento"
+		// Ver detalhes de empresa - precisa selecionar empresa primeiro
+		m.mode = modeEmpresaDetalhes
+		m.selectedEmpresaCursor = 0
+		m.message = "Selecione uma empresa para ver detalhes"
 	case "t":
-		// Timeline (futuro)
-		m.message = "Timeline em desenvolvimento"
+		// Timeline
+		m.mode = modeTimeline
+		m.message = "Carregando timeline de atividades..."
+	}
+	return m, nil
+}
+
+// updateViewSocios atualiza visualização de sócios
+func (m model) updateViewSocios(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "backspace":
+		m.mode = modeViewCNPJ
+		m.message = "Voltou para dados do CNPJ"
+	}
+	return m, nil
+}
+
+// updateCadeiaControle atualiza visualização de cadeia de controle
+func (m model) updateCadeiaControle(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "backspace":
+		m.mode = modeViewCNPJ
+		m.message = "Voltou para dados do CNPJ"
+	}
+	return m, nil
+}
+
+// updateTimeline atualiza visualização de timeline
+func (m model) updateTimeline(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "backspace":
+		// Volta para o modo anterior (CPF ou Forensics)
+		if m.searchType == "cpf" {
+			m.mode = modeViewCPF
+		} else {
+			m.mode = modeForensics
+		}
+		m.message = "Voltou para visualização anterior"
+	}
+	return m, nil
+}
+
+// updateEmpresaDetalhes atualiza visualização de detalhes de empresa
+func (m model) updateEmpresaDetalhes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "backspace":
+		m.mode = modeForensics
+		m.message = "Voltou para análise forense"
 	}
 	return m, nil
 }

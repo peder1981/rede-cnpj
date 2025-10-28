@@ -28,7 +28,7 @@ COMMENT ON COLUMN receita.empresas.capital_social IS 'Capital social em reais';
 
 -- Tabela: estabelecimento (matriz e filiais) - PARTICIONADA POR UF
 CREATE TABLE receita.estabelecimento (
-    cnpj VARCHAR(14) PRIMARY KEY,
+    cnpj VARCHAR(14) NOT NULL,
     cnpj_basico VARCHAR(8) NOT NULL,
     cnpj_ordem VARCHAR(4) NOT NULL,
     cnpj_dv VARCHAR(2) NOT NULL,
@@ -61,6 +61,7 @@ CREATE TABLE receita.estabelecimento (
     data_situacao_especial DATE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (cnpj, uf),
     FOREIGN KEY (cnpj_basico) REFERENCES receita.empresas(cnpj_basico)
 ) PARTITION BY LIST (uf);
 
@@ -113,8 +114,9 @@ CREATE TABLE receita.socios (
     faixa_etaria VARCHAR(1),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    PRIMARY KEY (id, identificador_de_socio),
-    FOREIGN KEY (cnpj) REFERENCES receita.estabelecimento(cnpj)
+    PRIMARY KEY (id, identificador_de_socio)
+    -- Nota: FOREIGN KEY removida devido à complexidade com particionamento
+    -- A integridade referencial deve ser garantida pela aplicação
 ) PARTITION BY LIST (identificador_de_socio);
 
 COMMENT ON TABLE receita.socios IS 'Sócios e administradores particionados por tipo';
@@ -254,15 +256,12 @@ CREATE TABLE forensics.alertas (
 
 COMMENT ON TABLE forensics.alertas IS 'Alertas de atividades suspeitas';
 
--- Criar triggers para updated_at
+-- Criar triggers para updated_at (apenas em tabelas não particionadas)
 CREATE TRIGGER update_empresas_updated_at BEFORE UPDATE ON receita.empresas
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_estabelecimento_updated_at BEFORE UPDATE ON receita.estabelecimento
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_socios_updated_at BEFORE UPDATE ON receita.socios
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Nota: Tabelas particionadas (estabelecimento, socios) não suportam triggers na tabela pai
+-- Os triggers devem ser criados em cada partição individualmente se necessário
 
 CREATE TRIGGER update_simples_updated_at BEFORE UPDATE ON receita.simples
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

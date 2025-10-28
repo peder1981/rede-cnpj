@@ -5,22 +5,50 @@ import (
 	"fmt"
 	"sync"
 
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/peder1981/rede-cnpj/RedeGO/internal/config"
 )
 
 var (
-	dbReceita *sql.DB
-	dbRede    *sql.DB
-	dbSearch  *sql.DB
+	db        *sql.DB // PostgreSQL connection
+	dbReceita *sql.DB // Legacy SQLite (deprecated)
+	dbRede    *sql.DB // Legacy SQLite (deprecated)
+	dbSearch  *sql.DB // Legacy SQLite (deprecated)
 	dbLocal   *sql.DB
 	dbMutex   sync.Mutex
 	once      sync.Once
+	usePostgres bool
 )
 
 // InitDatabases inicializa as conexões com os bancos de dados
 func InitDatabases(cfg *config.Config) error {
 	var err error
+
+	// Verificar se deve usar PostgreSQL
+	if cfg.PostgresURL != "" {
+		usePostgres = true
+		db, err = sql.Open("postgres", cfg.PostgresURL)
+		if err != nil {
+			return fmt.Errorf("erro ao conectar PostgreSQL: %w", err)
+		}
+		
+		// Configurações otimizadas para PostgreSQL
+		db.SetMaxOpenConns(25)
+		db.SetMaxIdleConns(10)
+		
+		// Testar conexão
+		if err := db.Ping(); err != nil {
+			return fmt.Errorf("erro ao pingar PostgreSQL: %w", err)
+		}
+		
+		fmt.Println("✅ Conectado ao PostgreSQL")
+		return nil
+	}
+
+	// Fallback para SQLite (legacy)
+	fmt.Println("⚠️  Usando SQLite (modo legado)")
+	usePostgres = false
 
 	// Base da Receita (CNPJ)
 	if cfg.BaseReceita != "" {
@@ -65,18 +93,40 @@ func InitDatabases(cfg *config.Config) error {
 	return nil
 }
 
-// GetDBReceita retorna a conexão com o banco da Receita
-func GetDBReceita() *sql.DB {
+// GetDB retorna a conexão principal (PostgreSQL ou SQLite)
+func GetDB() *sql.DB {
+	if usePostgres {
+		return db
+	}
 	return dbReceita
 }
 
-// GetDBRede retorna a conexão com o banco de Rede
+// IsPostgres retorna true se estiver usando PostgreSQL
+func IsPostgres() bool {
+	return usePostgres
+}
+
+// GetDBReceita retorna a conexão com o banco da Receita (legacy)
+func GetDBReceita() *sql.DB {
+	if usePostgres {
+		return db
+	}
+	return dbReceita
+}
+
+// GetDBRede retorna a conexão com o banco de Rede (legacy)
 func GetDBRede() *sql.DB {
+	if usePostgres {
+		return db
+	}
 	return dbRede
 }
 
-// GetDBSearch retorna a conexão com o banco de Search
+// GetDBSearch retorna a conexão com o banco de Search (legacy)
 func GetDBSearch() *sql.DB {
+	if usePostgres {
+		return db
+	}
 	return dbSearch
 }
 
@@ -97,6 +147,9 @@ func Unlock() {
 
 // Close fecha todas as conexões de banco de dados
 func Close() {
+	if db != nil {
+		db.Close()
+	}
 	if dbReceita != nil {
 		dbReceita.Close()
 	}
@@ -108,6 +161,45 @@ func Close() {
 	}
 	if dbLocal != nil {
 		dbLocal.Close()
+	}
+}
+
+// AdaptQuery adapta uma query SQLite para PostgreSQL
+func AdaptQuery(query string) string {
+	if !usePostgres {
+		return query
+	}
+	
+	// Substituir placeholders ? por $1, $2, etc
+	result := ""
+	paramCount := 1
+	for _, char := range query {
+		if char == '?' {
+			result += fmt.Sprintf("$%d", paramCount)
+			paramCount++
+		} else {
+			result += string(char)
+		}
+	}
+	
+	return result
+}
+
+// TablePrefix retorna o prefixo do schema para PostgreSQL
+func TablePrefix(table string) string {
+	if !usePostgres {
+		return table
+	}
+	
+	// Mapear tabelas para schemas PostgreSQL
+	switch table {
+	case "empresas", "estabelecimento", "socios", "simples",
+		"cnae", "motivo", "municipio", "natureza_juridica", "pais", "qualificacao_socio":
+		return "receita." + table
+	case "ligacao":
+		return "rede." + table
+	default:
+		return table
 	}
 }
 
@@ -155,7 +247,7 @@ func LoadDicionarios() (*DicionariosCodigosCNPJ, error) {
 	}
 
 	// Carrega qualificação de sócio
-	rows, err := db.Query("SELECT codigo, descricao FROM qualificacao_socio")
+	rows, err := db.Query(fmt.Sprintf("SELECT codigo, descricao FROM %s", TablePrefix("qualificacao_socio")))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -167,7 +259,7 @@ func LoadDicionarios() (*DicionariosCodigosCNPJ, error) {
 	}
 
 	// Carrega motivo de situação
-	rows, err = db.Query("SELECT codigo, descricao FROM motivo")
+	rows, err = db.Query(fmt.Sprintf("SELECT codigo, descricao FROM %s", TablePrefix("motivo")))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -179,7 +271,7 @@ func LoadDicionarios() (*DicionariosCodigosCNPJ, error) {
 	}
 
 	// Carrega CNAE
-	rows, err = db.Query("SELECT codigo, descricao FROM cnae")
+	rows, err = db.Query(fmt.Sprintf("SELECT codigo, descricao FROM %s", TablePrefix("cnae")))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -191,7 +283,7 @@ func LoadDicionarios() (*DicionariosCodigosCNPJ, error) {
 	}
 
 	// Carrega natureza jurídica
-	rows, err = db.Query("SELECT codigo, descricao FROM natureza_juridica")
+	rows, err = db.Query(fmt.Sprintf("SELECT codigo, descricao FROM %s", TablePrefix("natureza_juridica")))
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {

@@ -11,9 +11,10 @@ import (
 // Config representa a configuração da aplicação
 type Config struct {
 	// Base de dados
-	BaseReceita             string
-	BaseRede                string
-	BaseRedeSearch          string
+	PostgresURL             string // URL de conexão PostgreSQL (prioritário)
+	BaseReceita             string // SQLite (legacy)
+	BaseRede                string // SQLite (legacy)
+	BaseRedeSearch          string // SQLite (legacy)
 	BaseEnderecoNormalizado string
 	BaseLinks               string
 	BaseLocal               string
@@ -97,6 +98,7 @@ func LoadConfig() (*Config, error) {
 
 	cfg := &Config{
 		// Base de dados
+		PostgresURL:             viper.GetString("BASE.postgres_url"),
 		BaseReceita:             viper.GetString("BASE.base_receita"),
 		BaseRede:                viper.GetString("BASE.base_rede"),
 		BaseRedeSearch:          viper.GetString("BASE.base_rede_search"),

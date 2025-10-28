@@ -1,0 +1,13 @@
+LOAD DATABASE
+    FROM sqlite://bases/cnpj.db
+    INTO postgresql://rede_user:senha@localhost/rede_cnpj
+
+WITH include drop, create tables, create indexes, reset sequences
+
+SET work_mem to '256MB', maintenance_work_mem to '2GB'
+
+CAST type text to text drop typemod
+
+BEFORE LOAD DO
+    $$ DROP SCHEMA IF EXISTS receita CASCADE; $$,
+    $$ CREATE SCHEMA receita; $$;

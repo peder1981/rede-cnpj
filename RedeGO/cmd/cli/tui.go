@@ -25,6 +25,10 @@ const (
 	modeViewCPF
 	modeViewCNPJ
 	modeForensics
+	modeViewSocios
+	modeCadeiaControle
+	modeTimeline
+	modeEmpresaDetalhes
 )
 
 type nodeItem struct {
@@ -53,6 +57,8 @@ type model struct {
 	searchInput  string // input de busca (CPF/CNPJ)
 	searchType   string // "cpf" ou "cnpj"
 	viewData     string // dados para visualização
+	selectedEmpresaCursor int // cursor para seleção de empresa
+	selectedEmpresaCNPJ   string // CNPJ da empresa selecionada
 }
 
 func initialModel(redeService *services.RedeService, cnpj string) model {
@@ -113,11 +119,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Comandos globais
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c", "F10":
 			return m, tea.Quit
 		case "F1", "?":
 			m.mode = modeHelp
 			return m, nil
+		case "esc":
+			// ESC volta para o modo anterior ou para Tree se já estiver nele
+			if m.mode != modeTree {
+				m.mode = modeTree
+				m.message = "Voltou ao modo árvore"
+				return m, nil
+			}
 		}
 
 		// Comandos específicos por modo
@@ -140,6 +153,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateViewCNPJ(msg)
 		case modeForensics:
 			return m.updateForensics(msg)
+		case modeViewSocios:
+			return m.updateViewSocios(msg)
+		case modeCadeiaControle:
+			return m.updateCadeiaControle(msg)
+		case modeTimeline:
+			return m.updateTimeline(msg)
+		case modeEmpresaDetalhes:
+			return m.updateEmpresaDetalhes(msg)
 		}
 
 	case graphMsg:
@@ -464,13 +485,21 @@ func (m model) View() string {
 		return m.viewCNPJDetails(m.viewData)
 	case modeForensics:
 		return m.viewForensicsInvestigate(m.viewData)
+	case modeViewSocios:
+		return m.viewSociosList(m.viewData)
+	case modeCadeiaControle:
+		return m.viewCadeiaControle(m.viewData)
+	case modeTimeline:
+		return m.viewTimeline(m.viewData)
+	case modeEmpresaDetalhes:
+		return m.viewEmpresaDetalhes(m.selectedEmpresaCNPJ)
 	}
 
 	return ""
 }
 
 func (m model) viewError() string {
-	return fmt.Sprintf("\n❌ ERRO: %v\n\nPressione ESC para sair.\n", m.err)
+	return fmt.Sprintf("\n❌ ERRO: %v\n\nPressione [F10] para sair ou [ESC] para voltar.\n", m.err)
 }
 
 func (m model) viewTree() string {
@@ -545,7 +574,7 @@ func (m model) viewTree() string {
 	s += "┌──────────────────────────────────────────────────────────────────────┐\n"
 	s += "│ NAVEGAÇÃO: ↑↓ mover | → expandir | ← colapsar                       │\n"
 	s += "│ AÇÕES: [A]nalytics | [B]uscar CPF/CNPJ | [C]ruzamentos             │\n"
-	s += "│        [E]xportar | [F1/?] Ajuda | [ESC] Sair                       │\n"
+	s += "│        [E]xportar | [F1/?] Ajuda | [ESC] Voltar | [F10] Sair       │\n"
 	s += "└──────────────────────────────────────────────────────────────────────┘\n"
 
 	return s
@@ -658,7 +687,8 @@ func (m model) viewHelp() string {
 	s += "│  a              - Ver Analytics (estatísticas do grafo)             │\n"
 	s += "│  e              - Exportar dados (Excel ou CSV)                     │\n"
 	s += "│  F1 / ?         - Mostrar esta ajuda                                │\n"
-	s += "│  ESC            - Sair do programa                                  │\n"
+	s += "│  ESC            - Voltar ao menu principal                          │\n"
+	s += "│  F10            - Sair do programa                                  │\n"
 	s += "│                                                                      │\n"
 	s += "└──────────────────────────────────────────────────────────────────────┘\n\n"
 

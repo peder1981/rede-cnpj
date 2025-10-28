@@ -293,3 +293,256 @@ func getString(m map[string]interface{}, key string) string {
 	}
 	return ""
 }
+
+// viewSociosList exibe lista completa de sócios de um CNPJ
+func (m model) viewSociosList(cnpj string) string {
+	engine := crossdata.NewCrossDataEngine("bases/cnpj.db", "bases/rede.db")
+	socios, err := engine.SociosPorCNPJ(cnpj)
+	
+	if err != nil {
+		return fmt.Sprintf("\n❌ ERRO: %v\n", err)
+	}
+
+	s := "\n"
+	s += "╔══════════════════════════════════════════════════════════════════════╗\n"
+	s += "║         👥 LISTA COMPLETA DE SÓCIOS                                 ║\n"
+	s += "╚══════════════════════════════════════════════════════════════════════╝\n\n"
+
+	s += fmt.Sprintf("CNPJ: %s\n\n", cnpj)
+
+	if len(socios) == 0 {
+		s += "Nenhum sócio encontrado para este CNPJ.\n"
+		s += "\n[Q] Voltar\n"
+		return s
+	}
+
+	s += fmt.Sprintf("┌─ SÓCIOS (%d) ──────────────────────────────────────────────────────┐\n", len(socios))
+	
+	for i, socio := range socios {
+		if i >= 50 { // Limita a 50 para não poluir
+			s += fmt.Sprintf("│ ... e mais %d sócios                                              │\n", len(socios)-50)
+			break
+		}
+
+		nome := truncate(socio.NomeSocio, 45)
+		qualif := truncate(socio.QualificacaoSocio, 30)
+		cpfCnpj := socio.CNPJCPFSocio
+		
+		// Identifica tipo
+		tipoIcon := "👤"
+		if len(cpfCnpj) == 14 {
+			tipoIcon = "🏢"
+		}
+
+		s += fmt.Sprintf("│ %s %-45s                           │\n", tipoIcon, nome)
+		s += fmt.Sprintf("│    CPF/CNPJ: %-56s │\n", cpfCnpj)
+		s += fmt.Sprintf("│    Qualificação: %-50s │\n", qualif)
+		
+		if socio.DataEntradaSociedade != "" {
+			s += fmt.Sprintf("│    Entrada: %s                                                │\n", socio.DataEntradaSociedade)
+		}
+		
+		if socio.RepresentanteLegal != "" && socio.NomeRepresentante != "" {
+			s += fmt.Sprintf("│    Representante: %-49s │\n", truncate(socio.NomeRepresentante, 49))
+		}
+		
+		s += "│                                                                      │\n"
+	}
+	
+	s += "└────────────────────────────────────────────────────────────────────┘\n"
+	s += "\n[Q] Voltar para dados do CNPJ\n"
+
+	return s
+}
+
+// viewCadeiaControle exibe cadeia de controle de um CNPJ
+func (m model) viewCadeiaControle(cnpj string) string {
+	s := "\n"
+	s += "╔══════════════════════════════════════════════════════════════════════╗\n"
+	s += "║         🔗 CADEIA DE CONTROLE SOCIETÁRIO                            ║\n"
+	s += "╚══════════════════════════════════════════════════════════════════════╝\n\n"
+
+	s += fmt.Sprintf("CNPJ: %s\n\n", cnpj)
+
+	// Busca sócios para construir cadeia
+	engine := crossdata.NewCrossDataEngine("bases/cnpj.db", "bases/rede.db")
+	socios, err := engine.SociosPorCNPJ(cnpj)
+	
+	if err != nil {
+		return fmt.Sprintf("\n❌ ERRO: %v\n", err)
+	}
+
+	if len(socios) == 0 {
+		s += "Nenhum sócio encontrado para construir cadeia de controle.\n"
+		s += "\n[Q] Voltar\n"
+		return s
+	}
+
+	s += "┌─ ESTRUTURA SOCIETÁRIA ─────────────────────────────────────────────┐\n"
+	s += "│                                                                      │\n"
+	s += fmt.Sprintf("│ 🏢 EMPRESA: %s                                          │\n", cnpj)
+	s += "│                                                                      │\n"
+	
+	// Agrupa por tipo de sócio
+	pessoasFisicas := []crossdata.Socio{}
+	pessoasJuridicas := []crossdata.Socio{}
+	
+	for _, socio := range socios {
+		if len(socio.CNPJCPFSocio) == 11 {
+			pessoasFisicas = append(pessoasFisicas, socio)
+		} else {
+			pessoasJuridicas = append(pessoasJuridicas, socio)
+		}
+	}
+
+	// Mostra pessoas jurídicas (controladoras)
+	if len(pessoasJuridicas) > 0 {
+		s += "│ ┌─ CONTROLADORAS (PJ) ──────────────────────────────────────────┐ │\n"
+		for i, socio := range pessoasJuridicas {
+			if i >= 10 {
+				s += fmt.Sprintf("│ │   ... e mais %d empresas                                     │ │\n", len(pessoasJuridicas)-10)
+				break
+			}
+			nome := truncate(socio.NomeSocio, 40)
+			qualif := truncate(socio.QualificacaoSocio, 25)
+			s += fmt.Sprintf("│ │ 🏢 %-40s                           │ │\n", nome)
+			s += fmt.Sprintf("│ │    CNPJ: %-52s │ │\n", socio.CNPJCPFSocio)
+			s += fmt.Sprintf("│ │    %s%-50s │ │\n", "Cargo: ", qualif)
+			s += "│ │                                                              │ │\n"
+		}
+		s += "│ └────────────────────────────────────────────────────────────────┘ │\n"
+		s += "│                                                                      │\n"
+	}
+
+	// Mostra pessoas físicas
+	if len(pessoasFisicas) > 0 {
+		s += "│ ┌─ SÓCIOS PESSOAS FÍSICAS ──────────────────────────────────────┐ │\n"
+		for i, socio := range pessoasFisicas {
+			if i >= 15 {
+				s += fmt.Sprintf("│ │   ... e mais %d pessoas                                      │ │\n", len(pessoasFisicas)-15)
+				break
+			}
+			nome := truncate(socio.NomeSocio, 40)
+			qualif := truncate(socio.QualificacaoSocio, 25)
+			s += fmt.Sprintf("│ │ 👤 %-40s                           │ │\n", nome)
+			s += fmt.Sprintf("│ │    CPF: %-52s │ │\n", socio.CNPJCPFSocio)
+			s += fmt.Sprintf("│ │    Cargo: %-50s │ │\n", qualif)
+			s += "│ │                                                              │ │\n"
+		}
+		s += "│ └────────────────────────────────────────────────────────────────┘ │\n"
+	}
+	
+	s += "│                                                                      │\n"
+	s += "└────────────────────────────────────────────────────────────────────┘\n"
+	
+	s += "\n💡 Dica: Use a navegação em árvore para explorar empresas controladoras\n"
+	s += "\n[Q] Voltar para dados do CNPJ\n"
+
+	return s
+}
+
+// viewTimeline exibe timeline de atividades de uma pessoa
+func (m model) viewTimeline(cpf string) string {
+	engine := crossdata.NewCrossDataEngine("bases/cnpj.db", "bases/rede.db")
+	timeline, err := engine.TimelinePessoa(cpf)
+	
+	if err != nil {
+		return fmt.Sprintf("\n❌ ERRO: %v\n", err)
+	}
+
+	s := "\n"
+	s += "╔══════════════════════════════════════════════════════════════════════╗\n"
+	s += "║         📅 TIMELINE DE ATIVIDADES                                   ║\n"
+	s += "╚══════════════════════════════════════════════════════════════════════╝\n\n"
+
+	s += fmt.Sprintf("CPF: %s\n\n", cpf)
+
+	if len(timeline) == 0 {
+		s += "Nenhuma atividade registrada para este CPF.\n"
+		s += "\n[Q] Voltar\n"
+		return s
+	}
+
+	s += fmt.Sprintf("┌─ EVENTOS (%d) ─────────────────────────────────────────────────────┐\n", len(timeline))
+	
+	for i, evento := range timeline {
+		if i >= 30 { // Limita a 30 eventos
+			s += fmt.Sprintf("│ ... e mais %d eventos                                             │\n", len(timeline)-30)
+			break
+		}
+
+		data := getString(evento, "data")
+		cnpj := getString(evento, "cnpj")
+		empresa := truncate(getString(evento, "razao_social"), 40)
+		evento_tipo := getString(evento, "evento")
+		
+		// Ícone por tipo de evento
+		icon := "📌"
+		if strings.Contains(evento_tipo, "Entrada") {
+			icon = "✅"
+		} else if strings.Contains(evento_tipo, "Saída") {
+			icon = "❌"
+		} else if strings.Contains(evento_tipo, "Abertura") {
+			icon = "🆕"
+		} else if strings.Contains(evento_tipo, "Baixa") {
+			icon = "🔻"
+		}
+
+		s += fmt.Sprintf("│ %s %s - %-50s │\n", icon, data, evento_tipo)
+		s += fmt.Sprintf("│    %s - %-54s │\n", cnpj, empresa)
+		s += "│                                                                      │\n"
+	}
+	
+	s += "└────────────────────────────────────────────────────────────────────┘\n"
+	s += "\n[Q] Voltar\n"
+
+	return s
+}
+
+// viewEmpresaDetalhes exibe detalhes completos de uma empresa específica
+func (m model) viewEmpresaDetalhes(cnpj string) string {
+	if cnpj == "" {
+		return "\n❌ Nenhuma empresa selecionada\n\n[Q] Voltar\n"
+	}
+
+	engine := crossdata.NewCrossDataEngine("bases/cnpj.db", "bases/rede.db")
+	empresa, err := engine.DadosCompletosEmpresa(cnpj)
+	
+	if err != nil {
+		return fmt.Sprintf("\n❌ ERRO: %v\n", err)
+	}
+
+	s := "\n"
+	s += "╔══════════════════════════════════════════════════════════════════════╗\n"
+	s += "║         🔍 DETALHES COMPLETOS DA EMPRESA                            ║\n"
+	s += "╚══════════════════════════════════════════════════════════════════════╝\n\n"
+
+	// Reutiliza a visualização completa de CNPJ
+	s += fmt.Sprintf("CNPJ: %s\n", empresa.CNPJ)
+	s += fmt.Sprintf("Razão Social: %s\n", empresa.RazaoSocial)
+	s += fmt.Sprintf("Situação: %s\n", empresa.SituacaoCadastral)
+	s += fmt.Sprintf("Capital Social: R$ %.2f\n", empresa.CapitalSocial)
+	
+	if empresa.NomeFantasia != "" {
+		s += fmt.Sprintf("Nome Fantasia: %s\n", empresa.NomeFantasia)
+	}
+	
+	s += fmt.Sprintf("\nCNAE: %s\n", empresa.CNAEFiscal)
+	s += fmt.Sprintf("Porte: %s\n", empresa.PorteEmpresa)
+	
+	if empresa.CorreioEletronico != "" {
+		s += fmt.Sprintf("Email: %s\n", empresa.CorreioEletronico)
+	}
+	
+	if empresa.Telefone1 != "" {
+		s += fmt.Sprintf("Telefone: (%s) %s\n", empresa.DDD1, empresa.Telefone1)
+	}
+	
+	endereco := fmt.Sprintf("%s %s, %s - %s", empresa.TipoLogradouro, empresa.Logradouro, empresa.Numero, empresa.Bairro)
+	s += fmt.Sprintf("\nEndereço: %s\n", endereco)
+	s += fmt.Sprintf("CEP: %s - %s/%s\n", empresa.CEP, empresa.Municipio, empresa.UF)
+
+	s += "\n[Q] Voltar para análise forense\n"
+
+	return s
+}
