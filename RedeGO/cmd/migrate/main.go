@@ -63,6 +63,28 @@ func sanitizeNullString(ns sql.NullString) sql.NullString {
 	}
 }
 
+// sanitizeDateString converte strings vazias em NULL para campos de data
+func sanitizeDateString(ns sql.NullString) sql.NullString {
+	// Se não é válido, retorna como está
+	if !ns.Valid {
+		return ns
+	}
+	
+	// Remove espaços em branco
+	trimmed := strings.TrimSpace(ns.String)
+	
+	// Se a string está vazia após trim, retorna NULL
+	if trimmed == "" {
+		return sql.NullString{Valid: false}
+	}
+	
+	// Sanitiza e retorna
+	return sql.NullString{
+		String: sanitizeString(trimmed),
+		Valid:  true,
+	}
+}
+
 func main() {
 	printHeader()
 
@@ -354,9 +376,9 @@ func migrateEstabelecimentos(src, dst *sql.DB) MigrationStats {
 		fax = sanitizeString(fax)
 		email = sanitizeString(email)
 		situacaoEspecial = sanitizeString(situacaoEspecial)
-		dataSituacao = sanitizeNullString(dataSituacao)
-		dataInicio = sanitizeNullString(dataInicio)
-		dataEspecial = sanitizeNullString(dataEspecial)
+		dataSituacao = sanitizeDateString(dataSituacao)
+		dataInicio = sanitizeDateString(dataInicio)
+		dataEspecial = sanitizeDateString(dataEspecial)
 
 		_, err = stmt.Exec(
 			cnpj, cnpjBasico, cnpjOrdem, cnpjDv,
@@ -480,7 +502,7 @@ func migrateSocios(src, dst *sql.DB) MigrationStats {
 		nomeRep = sanitizeString(nomeRep)
 		qualifRep = sanitizeString(qualifRep)
 		faixaEtaria = sanitizeString(faixaEtaria)
-		dataEntrada = sanitizeNullString(dataEntrada)
+		dataEntrada = sanitizeDateString(dataEntrada)
 
 		_, err = stmt.Exec(
 			cnpj, cnpjBasico, identificador,
@@ -562,9 +584,10 @@ func migrateSimples(src, dst *sql.DB) MigrationStats {
 	}
 	defer stmt.Close()
 
-	// Migrar
+	// Migrar em batches
 	tx, _ := dst.Begin()
 	count := int64(0)
+	batchCount := 0
 
 	for rows.Next() {
 		var cnpjBasico, opcaoSimples, opcaoMei string
@@ -576,16 +599,35 @@ func migrateSimples(src, dst *sql.DB) MigrationStats {
 			&dataExclusaoMei,
 		)
 		if err != nil {
+			log.Printf("⚠️  Erro ao ler linha: %v", err)
 			continue
 		}
 
-		stmt.Exec(
+		// Sanitiza campos de data
+		dataOpcaoSimples = sanitizeDateString(dataOpcaoSimples)
+		dataExclusaoSimples = sanitizeDateString(dataExclusaoSimples)
+		dataOpcaoMei = sanitizeDateString(dataOpcaoMei)
+		dataExclusaoMei = sanitizeDateString(dataExclusaoMei)
+
+		_, err = stmt.Exec(
 			cnpjBasico, opcaoSimples, dataOpcaoSimples,
 			dataExclusaoSimples, opcaoMei, dataOpcaoMei,
 			dataExclusaoMei,
 		)
+		if err != nil {
+			log.Printf("⚠️  Erro ao inserir: %v", err)
+			continue
+		}
 
 		count++
+		batchCount++
+
+		if batchCount >= batchSize {
+			tx.Commit()
+			tx, _ = dst.Begin()
+			batchCount = 0
+			log.Printf("   Progresso: %d/%d (%.1f%%)", count, stat.TotalRows, float64(count)/float64(stat.TotalRows)*100)
+		}
 	}
 
 	tx.Commit()
@@ -610,28 +652,41 @@ func migrateLookupTables(src, dst *sql.DB) {
 			log.Printf("⚠️  Tabela %s não encontrada", table)
 			continue
 		}
-		defer rows.Close()
 
-		stmt, _ := dst.Prepare(fmt.Sprintf(`
+		stmt, err := dst.Prepare(fmt.Sprintf(`
 			INSERT INTO receita.%s (codigo, descricao) 
 			VALUES ($1, $2) 
 			ON CONFLICT (codigo) DO NOTHING
 		`, table))
-		defer stmt.Close()
+		if err != nil {
+			log.Printf("⚠️  Erro ao preparar insert para %s: %v", table, err)
+			rows.Close()
+			continue
+		}
 
 		count := 0
 		for rows.Next() {
 			var codigo, descricao string
-			rows.Scan(&codigo, &descricao)
+			err := rows.Scan(&codigo, &descricao)
+			if err != nil {
+				log.Printf("⚠️  Erro ao ler linha: %v", err)
+				continue
+			}
 			
 			// Sanitiza strings antes de inserir
 			codigo = sanitizeString(codigo)
 			descricao = sanitizeString(descricao)
 			
-			stmt.Exec(codigo, descricao)
+			_, err = stmt.Exec(codigo, descricao)
+			if err != nil {
+				log.Printf("⚠️  Erro ao inserir em %s: %v", table, err)
+				continue
+			}
 			count++
 		}
 
+		rows.Close()
+		stmt.Close()
 		log.Printf("✅ %s: %d registros", table, count)
 	}
 	log.Println("")
@@ -657,13 +712,21 @@ func migrateRede(src, dst *sql.DB) MigrationStats {
 	log.Printf("   Total de registros: %d", count)
 
 	// Migrar
-	rows, _ := src.Query("SELECT id1, id2, descricao, cnpj, peso FROM ligacao")
+	rows, err := src.Query("SELECT id1, id2, descricao, cnpj, peso FROM ligacao")
+	if err != nil {
+		log.Printf("❌ Erro ao ler ligações: %v", err)
+		return stat
+	}
 	defer rows.Close()
 
-	stmt, _ := dst.Prepare(`
+	stmt, err := dst.Prepare(`
 		INSERT INTO rede.ligacao (id1, id2, descricao, cnpj, peso)
 		VALUES ($1, $2, $3, $4, $5)
 	`)
+	if err != nil {
+		log.Printf("❌ Erro ao preparar insert: %v", err)
+		return stat
+	}
 	defer stmt.Close()
 
 	tx, _ := dst.Begin()
@@ -672,7 +735,11 @@ func migrateRede(src, dst *sql.DB) MigrationStats {
 	for rows.Next() {
 		var id1, id2, descricao, cnpj string
 		var peso int
-		rows.Scan(&id1, &id2, &descricao, &cnpj, &peso)
+		err := rows.Scan(&id1, &id2, &descricao, &cnpj, &peso)
+		if err != nil {
+			log.Printf("⚠️  Erro ao ler linha: %v", err)
+			continue
+		}
 		
 		// Sanitiza strings antes de inserir
 		id1 = sanitizeString(id1)
@@ -680,13 +747,17 @@ func migrateRede(src, dst *sql.DB) MigrationStats {
 		descricao = sanitizeString(descricao)
 		cnpj = sanitizeString(cnpj)
 		
-		stmt.Exec(id1, id2, descricao, cnpj, peso)
+		_, err = stmt.Exec(id1, id2, descricao, cnpj, peso)
+		if err != nil {
+			log.Printf("⚠️  Erro ao inserir: %v", err)
+			continue
+		}
 		migrated++
 
 		if migrated%batchSize == 0 {
 			tx.Commit()
 			tx, _ = dst.Begin()
-			log.Printf("   Progresso: %d/%d", migrated, count)
+			log.Printf("   Progresso: %d/%d (%.1f%%)", migrated, count, float64(migrated)/float64(count)*100)
 		}
 	}
 
