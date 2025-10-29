@@ -337,8 +337,7 @@ func (m model) updateCrossData(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter", " ":
 		// Executa cruzamento
-		m.message = "Funcionalidade em desenvolvimento"
-		m.mode = modeTree
+		return m.executeCrossData()
 	case "q", "backspace":
 		m.mode = modeTree
 		m.message = "Voltou ao modo árvore"

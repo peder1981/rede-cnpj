@@ -63,26 +63,93 @@ func sanitizeNullString(ns sql.NullString) sql.NullString {
 	}
 }
 
-// sanitizeDateString converte strings vazias em NULL para campos de data
-func sanitizeDateString(ns sql.NullString) sql.NullString {
-	// Se não é válido, retorna como está
+// sanitizeNumericString normaliza campos numéricos
+// Converte strings vazias ou inválidas em NULL
+func sanitizeNumericString(ns sql.NullString) sql.NullString {
 	if !ns.Valid {
-		return ns
+		return sql.NullString{Valid: false}
+	}
+	
+	trimmed := strings.TrimSpace(ns.String)
+	
+	// Valores inválidos
+	if trimmed == "" || trimmed == "0" || trimmed == "00" {
+		return sql.NullString{Valid: false}
+	}
+	
+	return sql.NullString{
+		String: trimmed,
+		Valid:  true,
+	}
+}
+
+// sanitizeDateString normaliza e valida campos de data
+// Converte valores inválidos (vazios, "0", "00000000", etc) em NULL
+func sanitizeDateString(ns sql.NullString) sql.NullString {
+	// Se não é válido, retorna NULL
+	if !ns.Valid {
+		return sql.NullString{Valid: false}
 	}
 	
 	// Remove espaços em branco
 	trimmed := strings.TrimSpace(ns.String)
 	
-	// Se a string está vazia após trim, retorna NULL
-	if trimmed == "" {
-		return sql.NullString{Valid: false}
+	// Valores inválidos que devem ser convertidos para NULL
+	invalidValues := []string{"", "0", "00", "000", "0000", "00000000"}
+	for _, invalid := range invalidValues {
+		if trimmed == invalid {
+			return sql.NullString{Valid: false}
+		}
 	}
 	
-	// Sanitiza e retorna
-	return sql.NullString{
-		String: sanitizeString(trimmed),
-		Valid:  true,
+	// Valida formato de data (YYYYMMDD - 8 dígitos)
+	if len(trimmed) == 8 {
+		// Verifica se todos são dígitos
+		for _, c := range trimmed {
+			if c < '0' || c > '9' {
+				// Formato inválido, retorna NULL
+				return sql.NullString{Valid: false}
+			}
+		}
+		
+		// Valida componentes da data
+		year := trimmed[0:4]
+		month := trimmed[4:6]
+		day := trimmed[6:8]
+		
+		// Verifica se ano é válido (maior que 1900 e menor que 2100)
+		if year < "1900" || year > "2100" {
+			return sql.NullString{Valid: false}
+		}
+		
+		// Verifica se mês é válido (01-12)
+		if month < "01" || month > "12" {
+			return sql.NullString{Valid: false}
+		}
+		
+		// Verifica se dia é válido (01-31)
+		if day < "01" || day > "31" {
+			return sql.NullString{Valid: false}
+		}
+		
+		// Data válida, retorna formatada como YYYY-MM-DD para PostgreSQL
+		return sql.NullString{
+			String: year + "-" + month + "-" + day,
+			Valid:  true,
+		}
 	}
+	
+	// Se não tem 8 dígitos, tenta outros formatos comuns
+	// Formato YYYY-MM-DD já está correto
+	if len(trimmed) == 10 && trimmed[4] == '-' && trimmed[7] == '-' {
+		return sql.NullString{
+			String: trimmed,
+			Valid:  true,
+		}
+	}
+	
+	// Formato inválido, retorna NULL
+	return sql.NullString{Valid: false}
 }
 
 func main() {
@@ -155,6 +222,9 @@ func migrateEmpresas(src, dst *sql.DB) MigrationStats {
 
 	log.Println("📊 Migrando tabela: empresas")
 
+	// Criar normalizador específico para empresas
+	normalizer := GetEmpresasNormalizer()
+
 	// Contar registros
 	err := src.QueryRow("SELECT COUNT(*) FROM empresas").Scan(&stat.TotalRows)
 	if err != nil {
@@ -216,15 +286,16 @@ func migrateEmpresas(src, dst *sql.DB) MigrationStats {
 			continue
 		}
 
-		// Sanitiza strings antes de inserir
-		cnpj = sanitizeNullString(cnpj)
-		razao = sanitizeNullString(razao)
-		natureza = sanitizeNullString(natureza)
-		qualif = sanitizeNullString(qualif)
-		porte = sanitizeNullString(porte)
-		ente = sanitizeNullString(ente)
+		// Normaliza campos usando metadados específicos da tabela
+		cnpjNorm := normalizer.NormalizeNullString("cnpj_basico", cnpj)
+		razaoNorm := normalizer.NormalizeNullString("razao_social", razao)
+		naturezaNorm := normalizer.NormalizeNullString("natureza_juridica", natureza)
+		qualifNorm := normalizer.NormalizeNullString("qualificacao_responsavel", qualif)
+		porteNorm := normalizer.NormalizeNullString("porte_empresa", porte)
+		enteNorm := normalizer.NormalizeNullString("ente_federativo_responsavel", ente)
+		capitalNorm := normalizer.NormalizeFloat64("capital_social", capital)
 
-		_, err = stmt.Exec(cnpj, razao, natureza, qualif, capital, porte, ente)
+		_, err = stmt.Exec(cnpjNorm, razaoNorm, naturezaNorm, qualifNorm, capitalNorm, porteNorm, enteNorm)
 		if err != nil {
 			log.Printf("⚠️  Erro ao inserir: %v", err)
 			continue
@@ -259,6 +330,9 @@ func migrateEstabelecimentos(src, dst *sql.DB) MigrationStats {
 	}
 
 	log.Println("📊 Migrando tabela: estabelecimento")
+
+	// Criar normalizador específico para estabelecimento
+	normalizer := GetEstabelecimentoNormalizer()
 
 	// Contar registros
 	err := src.QueryRow("SELECT COUNT(*) FROM estabelecimento").Scan(&stat.TotalRows)
@@ -347,53 +421,55 @@ func migrateEstabelecimentos(src, dst *sql.DB) MigrationStats {
 			continue
 		}
 
-		// Sanitiza strings antes de inserir
-		cnpj = sanitizeString(cnpj)
-		cnpjBasico = sanitizeString(cnpjBasico)
-		cnpjOrdem = sanitizeString(cnpjOrdem)
-		cnpjDv = sanitizeString(cnpjDv)
-		matrizFilial = sanitizeString(matrizFilial)
-		nomeFantasia = sanitizeString(nomeFantasia)
-		situacaoCadastral = sanitizeString(situacaoCadastral)
-		motivoSituacao = sanitizeString(motivoSituacao)
-		nomeCidadeExterior = sanitizeString(nomeCidadeExterior)
-		pais = sanitizeString(pais)
-		cnae = sanitizeString(cnae)
-		cnaeSecundaria = sanitizeString(cnaeSecundaria)
-		tipoLogradouro = sanitizeString(tipoLogradouro)
-		logradouro = sanitizeString(logradouro)
-		numero = sanitizeString(numero)
-		complemento = sanitizeString(complemento)
-		bairro = sanitizeString(bairro)
-		cep = sanitizeString(cep)
-		uf = sanitizeString(uf)
-		municipio = sanitizeString(municipio)
-		ddd1 = sanitizeString(ddd1)
-		tel1 = sanitizeString(tel1)
-		ddd2 = sanitizeString(ddd2)
-		tel2 = sanitizeString(tel2)
-		dddFax = sanitizeString(dddFax)
-		fax = sanitizeString(fax)
-		email = sanitizeString(email)
-		situacaoEspecial = sanitizeString(situacaoEspecial)
-		dataSituacao = sanitizeDateString(dataSituacao)
-		dataInicio = sanitizeDateString(dataInicio)
-		dataEspecial = sanitizeDateString(dataEspecial)
+		// Normaliza campos usando metadados específicos da tabela
+		cnpjNorm := normalizer.NormalizeString("cnpj", cnpj)
+		cnpjBasicoNorm := normalizer.NormalizeString("cnpj_basico", cnpjBasico)
+		cnpjOrdemNorm := normalizer.NormalizeString("cnpj_ordem", cnpjOrdem)
+		cnpjDvNorm := normalizer.NormalizeString("cnpj_dv", cnpjDv)
+		matrizFilialNorm := normalizer.NormalizeString("matriz_filial", matrizFilial)
+		nomeFantasiaNorm := normalizer.NormalizeString("nome_fantasia", nomeFantasia)
+		situacaoCadastralNorm := normalizer.NormalizeString("situacao_cadastral", situacaoCadastral)
+		motivoSituacaoNorm := normalizer.NormalizeString("motivo_situacao_cadastral", motivoSituacao)
+		nomeCidadeExteriorNorm := normalizer.NormalizeString("nome_cidade_exterior", nomeCidadeExterior)
+		paisNorm := normalizer.NormalizeString("pais", pais)
+		cnaeNorm := normalizer.NormalizeString("cnae_fiscal", cnae)
+		cnaeSecundariaNorm := normalizer.NormalizeString("cnae_fiscal_secundaria", cnaeSecundaria)
+		tipoLogradouroNorm := normalizer.NormalizeString("tipo_logradouro", tipoLogradouro)
+		logradouroNorm := normalizer.NormalizeString("logradouro", logradouro)
+		numeroNorm := normalizer.NormalizeString("numero", numero)
+		complementoNorm := normalizer.NormalizeString("complemento", complemento)
+		bairroNorm := normalizer.NormalizeString("bairro", bairro)
+		cepNorm := normalizer.NormalizeString("cep", cep)
+		ufNorm := normalizer.NormalizeString("uf", uf)
+		municipioNorm := normalizer.NormalizeString("municipio", municipio)
+		ddd1Norm := normalizer.NormalizeString("ddd1", ddd1)
+		tel1Norm := normalizer.NormalizeString("telefone1", tel1)
+		ddd2Norm := normalizer.NormalizeString("ddd2", ddd2)
+		tel2Norm := normalizer.NormalizeString("telefone2", tel2)
+		dddFaxNorm := normalizer.NormalizeString("ddd_fax", dddFax)
+		faxNorm := normalizer.NormalizeString("fax", fax)
+		emailNorm := normalizer.NormalizeString("correio_eletronico", email)
+		situacaoEspecialNorm := normalizer.NormalizeString("situacao_especial", situacaoEspecial)
+		dataSituacaoNorm := normalizer.NormalizeNullString("data_situacao_cadastral", dataSituacao)
+		dataInicioNorm := normalizer.NormalizeNullString("data_inicio_atividades", dataInicio)
+		dataEspecialNorm := normalizer.NormalizeNullString("data_situacao_especial", dataEspecial)
 
 		_, err = stmt.Exec(
-			cnpj, cnpjBasico, cnpjOrdem, cnpjDv,
-			matrizFilial, nomeFantasia, situacaoCadastral,
-			dataSituacao, motivoSituacao,
-			nomeCidadeExterior, pais, dataInicio,
-			cnae, cnaeSecundaria,
-			tipoLogradouro, logradouro, numero, complemento,
-			bairro, cep, uf, municipio,
-			ddd1, tel1, ddd2, tel2,
-			dddFax, fax, email,
-			situacaoEspecial, dataEspecial,
+			cnpjNorm, cnpjBasicoNorm, cnpjOrdemNorm, cnpjDvNorm,
+			matrizFilialNorm, nomeFantasiaNorm, situacaoCadastralNorm,
+			dataSituacaoNorm, motivoSituacaoNorm,
+			nomeCidadeExteriorNorm, paisNorm, dataInicioNorm,
+			cnaeNorm, cnaeSecundariaNorm,
+			tipoLogradouroNorm, logradouroNorm, numeroNorm, complementoNorm,
+			bairroNorm, cepNorm, ufNorm, municipioNorm,
+			ddd1Norm, tel1Norm, ddd2Norm, tel2Norm,
+			dddFaxNorm, faxNorm, emailNorm,
+			situacaoEspecialNorm, dataEspecialNorm,
 		)
 		if err != nil {
-			log.Printf("⚠️  Erro ao inserir: %v", err)
+			log.Printf("⚠️  Erro ao inserir CNPJ %s: %v", cnpj, err)
+			log.Printf("    Datas normalizadas: situacao=%v, inicio=%v, especial=%v", 
+				dataSituacaoNorm, dataInicioNorm, dataEspecialNorm)
 			continue
 		}
 
@@ -426,6 +502,9 @@ func migrateSocios(src, dst *sql.DB) MigrationStats {
 	}
 
 	log.Println("📊 Migrando tabela: socios")
+
+	// Criar normalizador específico para socios
+	normalizer := GetSociosNormalizer()
 
 	// Contar registros
 	err := src.QueryRow("SELECT COUNT(*) FROM socios").Scan(&stat.TotalRows)
@@ -490,26 +569,26 @@ func migrateSocios(src, dst *sql.DB) MigrationStats {
 			continue
 		}
 
-		// Sanitiza strings antes de inserir
-		cnpj = sanitizeString(cnpj)
-		cnpjBasico = sanitizeString(cnpjBasico)
-		identificador = sanitizeString(identificador)
-		nome = sanitizeString(nome)
-		cpfCnpj = sanitizeString(cpfCnpj)
-		qualif = sanitizeString(qualif)
-		pais = sanitizeString(pais)
-		repLegal = sanitizeString(repLegal)
-		nomeRep = sanitizeString(nomeRep)
-		qualifRep = sanitizeString(qualifRep)
-		faixaEtaria = sanitizeString(faixaEtaria)
-		dataEntrada = sanitizeDateString(dataEntrada)
+		// Normaliza campos usando metadados específicos da tabela
+		cnpjNorm := normalizer.NormalizeString("cnpj", cnpj)
+		cnpjBasicoNorm := normalizer.NormalizeString("cnpj_basico", cnpjBasico)
+		identificadorNorm := normalizer.NormalizeString("identificador_de_socio", identificador)
+		nomeNorm := normalizer.NormalizeString("nome_socio", nome)
+		cpfCnpjNorm := normalizer.NormalizeString("cnpj_cpf_socio", cpfCnpj)
+		qualifNorm := normalizer.NormalizeString("qualificacao_socio", qualif)
+		paisNorm := normalizer.NormalizeString("pais", pais)
+		repLegalNorm := normalizer.NormalizeString("representante_legal", repLegal)
+		nomeRepNorm := normalizer.NormalizeString("nome_representante", nomeRep)
+		qualifRepNorm := normalizer.NormalizeString("qualificacao_representante_legal", qualifRep)
+		faixaEtariaNorm := normalizer.NormalizeString("faixa_etaria", faixaEtaria)
+		dataEntradaNorm := normalizer.NormalizeNullString("data_entrada_sociedade", dataEntrada)
 
 		_, err = stmt.Exec(
-			cnpj, cnpjBasico, identificador,
-			nome, cpfCnpj, qualif,
-			dataEntrada, pais,
-			repLegal, nomeRep,
-			qualifRep, faixaEtaria,
+			cnpjNorm, cnpjBasicoNorm, identificadorNorm,
+			nomeNorm, cpfCnpjNorm, qualifNorm,
+			dataEntradaNorm, paisNorm,
+			repLegalNorm, nomeRepNorm,
+			qualifRepNorm, faixaEtariaNorm,
 		)
 		if err != nil {
 			log.Printf("⚠️  Erro ao inserir: %v", err)
@@ -545,6 +624,9 @@ func migrateSimples(src, dst *sql.DB) MigrationStats {
 	}
 
 	log.Println("📊 Migrando tabela: simples")
+
+	// Criar normalizador específico para simples
+	normalizer := GetSimplesNormalizer()
 
 	// Contar registros
 	err := src.QueryRow("SELECT COUNT(*) FROM simples").Scan(&stat.TotalRows)
@@ -603,16 +685,19 @@ func migrateSimples(src, dst *sql.DB) MigrationStats {
 			continue
 		}
 
-		// Sanitiza campos de data
-		dataOpcaoSimples = sanitizeDateString(dataOpcaoSimples)
-		dataExclusaoSimples = sanitizeDateString(dataExclusaoSimples)
-		dataOpcaoMei = sanitizeDateString(dataOpcaoMei)
-		dataExclusaoMei = sanitizeDateString(dataExclusaoMei)
+		// Normaliza campos usando metadados específicos da tabela
+		cnpjBasicoNorm := normalizer.NormalizeString("cnpj_basico", cnpjBasico)
+		opcaoSimplesNorm := normalizer.NormalizeString("opcao_simples", opcaoSimples)
+		dataOpcaoSimplesNorm := normalizer.NormalizeNullString("data_opcao_simples", dataOpcaoSimples)
+		dataExclusaoSimplesNorm := normalizer.NormalizeNullString("data_exclusao_simples", dataExclusaoSimples)
+		opcaoMeiNorm := normalizer.NormalizeString("opcao_mei", opcaoMei)
+		dataOpcaoMeiNorm := normalizer.NormalizeNullString("data_opcao_mei", dataOpcaoMei)
+		dataExclusaoMeiNorm := normalizer.NormalizeNullString("data_exclusao_mei", dataExclusaoMei)
 
 		_, err = stmt.Exec(
-			cnpjBasico, opcaoSimples, dataOpcaoSimples,
-			dataExclusaoSimples, opcaoMei, dataOpcaoMei,
-			dataExclusaoMei,
+			cnpjBasicoNorm, opcaoSimplesNorm, dataOpcaoSimplesNorm,
+			dataExclusaoSimplesNorm, opcaoMeiNorm, dataOpcaoMeiNorm,
+			dataExclusaoMeiNorm,
 		)
 		if err != nil {
 			log.Printf("⚠️  Erro ao inserir: %v", err)
