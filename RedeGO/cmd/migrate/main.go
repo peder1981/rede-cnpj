@@ -454,6 +454,28 @@ func migrateEstabelecimentos(src, dst *sql.DB) MigrationStats {
 		dataInicioNorm := normalizer.NormalizeNullString("data_inicio_atividades", dataInicio)
 		dataEspecialNorm := normalizer.NormalizeNullString("data_situacao_especial", dataEspecial)
 
+		// Validar campos obrigatórios antes de inserir
+		if !cnpjNorm.Valid || cnpjNorm.String == "" {
+			log.Printf("⚠️  CNPJ vazio ou inválido: original='%s'", cnpj)
+			continue
+		}
+		if !cnpjBasicoNorm.Valid || cnpjBasicoNorm.String == "" {
+			log.Printf("⚠️  CNPJ Básico vazio: CNPJ=%s, original='%s'", cnpj, cnpjBasico)
+			continue
+		}
+		if !cnpjOrdemNorm.Valid || cnpjOrdemNorm.String == "" {
+			log.Printf("⚠️  CNPJ Ordem vazio: CNPJ=%s, original='%s'", cnpj, cnpjOrdem)
+			continue
+		}
+		if !cnpjDvNorm.Valid || cnpjDvNorm.String == "" {
+			log.Printf("⚠️  CNPJ DV vazio: CNPJ=%s, original='%s'", cnpj, cnpjDv)
+			continue
+		}
+		if !ufNorm.Valid || ufNorm.String == "" {
+			log.Printf("⚠️  UF vazio: CNPJ=%s, original='%s'", cnpj, uf)
+			continue
+		}
+
 		_, err = stmt.Exec(
 			cnpjNorm, cnpjBasicoNorm, cnpjOrdemNorm, cnpjDvNorm,
 			matrizFilialNorm, nomeFantasiaNorm, situacaoCadastralNorm,
@@ -468,7 +490,9 @@ func migrateEstabelecimentos(src, dst *sql.DB) MigrationStats {
 		)
 		if err != nil {
 			log.Printf("⚠️  Erro ao inserir CNPJ %s: %v", cnpj, err)
-			log.Printf("    Datas normalizadas: situacao=%v, inicio=%v, especial=%v", 
+			log.Printf("    Campos: basico='%s', ordem='%s', dv='%s', uf='%s'",
+				cnpjBasicoNorm.String, cnpjOrdemNorm.String, cnpjDvNorm.String, ufNorm.String)
+			log.Printf("    Datas: situacao=%v, inicio=%v, especial=%v", 
 				dataSituacaoNorm, dataInicioNorm, dataEspecialNorm)
 			continue
 		}
