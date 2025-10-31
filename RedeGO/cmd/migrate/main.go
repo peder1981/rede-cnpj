@@ -52,17 +52,6 @@ func sanitizeString(s string) string {
 	}, s)
 }
 
-// sanitizeNullString sanitiza um sql.NullString
-func sanitizeNullString(ns sql.NullString) sql.NullString {
-	if !ns.Valid {
-		return ns
-	}
-	return sql.NullString{
-		String: sanitizeString(ns.String),
-		Valid:  true,
-	}
-}
-
 // sanitizeNumericString normaliza campos numéricos
 // Converte strings vazias ou inválidas em NULL
 func sanitizeNumericString(ns sql.NullString) sql.NullString {

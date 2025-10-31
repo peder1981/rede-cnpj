@@ -17,15 +17,44 @@ func main() {
 	createLinks := flag.Bool("links", false, "Cria tabelas de ligação (rede.db)")
 	createSearch := flag.Bool("search", false, "Cria índices de busca (rede_search.db)")
 	all := flag.Bool("all", false, "Executa todo o processo (download + process + links + search)")
+	confFile := flag.String("config", "rede.ini", "Arquivo de configuração (opcional)")
 	
 	flag.Parse()
 
-	// Carrega configuração manualmente sem flags duplicadas
-	cfg := &config.Config{
-		BaseReceita:    "bases/cnpj.db",
-		BaseRede:       "bases/rede.db",
-		BaseRedeSearch: "bases/rede_search.db",
-		PastaArquivos:  "arquivos",
+	// Tenta carregar configuração do arquivo
+	var cfg *config.Config
+	var err error
+	
+	// Verifica se arquivo de config existe
+	if _, statErr := os.Stat(*confFile); statErr == nil {
+		fmt.Printf("ℹ️  Carregando configuração de %s...\n", *confFile)
+		cfg, err = config.LoadConfig()
+		if err != nil {
+			fmt.Printf("⚠️  Erro ao carregar config: %v\n", err)
+			fmt.Println("⚠️  Usando configuração padrão (SQLite)")
+			cfg = &config.Config{
+				BaseReceita:    "bases/cnpj.db",
+				BaseRede:       "bases/rede.db",
+				BaseRedeSearch: "bases/rede_search.db",
+				PastaArquivos:  "arquivos",
+			}
+		}
+	} else {
+		// Arquivo não existe, usa config padrão
+		fmt.Println("ℹ️  Nenhum arquivo de configuração encontrado, usando SQLite")
+		cfg = &config.Config{
+			BaseReceita:    "bases/cnpj.db",
+			BaseRede:       "bases/rede.db",
+			BaseRedeSearch: "bases/rede_search.db",
+			PastaArquivos:  "arquivos",
+		}
+	}
+	
+	// Exibe tipo de banco que será usado
+	if cfg.PostgresURL != "" {
+		fmt.Println("🐘 Banco de dados: PostgreSQL (importação direta)")
+	} else {
+		fmt.Println("🗄️  Banco de dados: SQLite (modo legado)")
 	}
 
 	// Cria importador

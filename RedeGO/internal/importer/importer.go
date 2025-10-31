@@ -36,7 +36,7 @@ func (i *Importer) DownloadFiles() error {
 
 // ProcessFiles processa os arquivos ZIP e cria o banco cnpj.db
 func (i *Importer) ProcessFiles() error {
-	processor := NewProcessor(i.zipDir, i.csvDir, i.dbDir)
+	processor := NewProcessorWithConfig(i.zipDir, i.csvDir, i.dbDir, i.cfg)
 	return processor.Process()
 }
 
